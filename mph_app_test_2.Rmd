@@ -13,17 +13,26 @@ library(GGally)
 #library(tidytext)
 library(SnowballC)
 library(tidyverse)
-library(rjson)
+#library(rjson)
+library(RCurl)
 ```
 
 ```{r,include=FALSE}
 ############################################ Read Data #########################################
 ```
+```{r, eval = FALSE}
+#read_rds(file_path)
+#write_csv(mph, file.path('data','mph.csv'))
+#read.csv(text=httr:GET('https://github.com/harlananelson/data/blob/master/data/mph.rds'))
+```
 
 ```{r global}
-# load the source data
-mph <- read_rds(file.path('data','mph.rds')) %>% 
+#install.packages('RCurl')
+file_path <- 'https://github.com/harlananelson/data/blob/master/data/mph.rds?raw=true'
+file_mph <- 'https://github.com/harlananelson/data/blob/master/data/mph.csv'
+mph <- read.csv(text = file_path)  %>% 
   mutate(All = TRUE)
+
 ```
 
 
