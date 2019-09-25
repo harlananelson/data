@@ -1,0 +1,250 @@
+---
+title: "Analyze the Data"
+output: html_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, include = FALSE)
+library(Hmisc)
+library(GGally)
+library(tidytext)
+library(SnowballC)
+library(tidyverse)
+library(rjson)
+```
+
+```{r,include=FALSE}
+############################################ Read Data #########################################
+```
+
+```{r global}
+# load the source data
+mph <- read_rds(file.path('data','mph.rds')) %>% 
+  mutate(All = TRUE)
+```
+
+
+```{r, include=FALSE}
+################################   Non reactive Functions ######################################
+```
+
+```{r}
+#' Filter the data based on the selected measures
+#' 
+#' Filter the data based on the selected measures,  account the selecting All measures
+#' 
+#' @param d A data set to be piped into the selection code
+#' @param measure_list  A list of the selected measures, can be `All`
+#'
+#' @result A data frame with the records containing the selected measures.
+filter_data_by_measure <- function(d, measure_list){
+  d  %>% 
+    filter(measure %in% measure_list | 'All' %in% measure_list)  
+}
+```
+
+```{r}
+#' Filter the data based on the selected tags
+#' 
+#' Filter the data based on the selected tags,  account the selecting 'All' tags
+#' 
+#' @param d A data set to be piped into the selection code
+#' @param tags_list  A list of the selected tags, can be `All`
+#'
+#' @param d Source data frame
+#' @result A data frame with the records containing the selected tags .
+filter_data_by_tag <- function(d, tag_list){
+  d  %>% 
+    filter(measure %in% tag_list | 'All' %in% tag_list)  
+}
+```
+
+```{r}
+#' Filter the data based on a topics filter list
+#'
+#' The data is subset based on choices, given these choices, filter the data.
+#'
+#' @param d Source data frame
+#' @param filter_list A list of the topics choices.
+#'
+#' @result A data frame with the select records where the topics listed are TRUE
+filter_data_by_topic <- function(d, filter_list){
+  d  %>% 
+    filter(!!! rlang::syms(filter_list))
+}
+
+```
+
+
+```{r}
+#'  filter data based on user selection for tag, measure and topic
+#' 
+#'  filter data based on user selection for tag, measure and topic
+#'
+#' @param d Source data frame
+filter_data <- function(d, measure_list, tag_list, topic_list){
+  d  %>% 
+    filter_data_by_measure(measure_list) %>% 
+    filter_data_by_tag(tag_list) %>% 
+    filter_data_by_topic(topic_list)
+}
+```
+
+```{r}
+#' Function to Update the list for the measures.
+#'
+#' Function to Update the list for the measures.
+#'
+#' @param d The soure data frame before any filtering
+#' @param tag_list  The list of chosen tag
+#' @param topics_list The list of chosen topics
+#' @result a list of measures where there are data points after measure and topic filtering
+choices_measure <- function(d, tag_list, topic_list){ 
+  mph %>% 
+    filter_data_by_tag(tag_list) %>% 
+    filter_data_by_topic(topic_list) %>% 
+    select(measure) %>% 
+    distinct %>% 
+    pull(measure) %>% 
+    prepend('All') 
+}
+choices_list_measure <- mph %>% choices_measure(c('All'), c('All'))
+choices_list_measure
+```
+
+```{r}
+#` update the choice list for the tags.
+#`
+#` Given a current measure and topics list, give all the tags where there is data.     
+#` 
+#` @param d The full data set
+#` @param measure_list The list of selected measures.
+#` @param topic_list The list of the selected topics.
+choices_tag <- function(d, measure_list, topic_list ) { 
+  mph %>% 
+    filter_data_by_measure(measure_list) %>% 
+    filter_data_by_topic(topic_list) %>% 
+    select(tag) %>% 
+    distinct %>% 
+    pull(tag) %>% 
+    prepend("All") 
+} 
+choices_list_tag <- mph %>% choices_tag(choices_list_measure, c('All'))
+choices_list_tag
+```
+
+```{r}
+#` update the list for the logical.
+#`
+#` Given a current choice list, give all the other topics that have at least one record with a TRUE value
+
+choices_topic <- function(d, measure_list, tag_list, topic_list ) { 
+  mph %>% 
+    filter_data_by_measure(measure_list) %>% 
+    filter_data_by_tag(tag_list) %>% 
+    filter_data_by_topic(topic_list) %>% 
+    select_if(is.logical)    %>%  
+    gather %>%  
+    distinct %>%  
+    filter(value) %>%  
+    filter(key != 'All') %>%  
+    pull(key)  %>%  
+    prepend('All')
+} 
+choices_list_topic <- mph %>% choices_topic(choices_list_tag, choices_list_topic,c('All')) 
+choices_list_topic
+```
+
+
+# Create the input list.
+```{r}
+choices_measure(mph,c('All'),c('All'))
+```
+
+```{r}
+input             <- list()
+input$tag         <- c('All')
+input$measure     <- c('All')
+input$topics      <- c('All')
+input$filter_data <- 1
+input$density     <- 1
+```
+```{r}
+
+choices_list_measure <- mph %>% choices_measure(c('All'), c('All'))
+choices_list_measure
+```
+
+```{r}
+choices_list_measure <- mph %>% choices_measure(c('All'), c('All'))
+choices_list_measure
+
+choices_list_tag <- mph %>% choices_tag(choices_list_measure, c('All'))
+choices_list_tag
+
+choices_list_topic <- mph %>% choices_topic(choices_list_tag, choices_list_topic,c('All')) 
+choices_list_topic
+```
+
+
+```{r, include=FALSE}
+######################################  Test Code ####################################
+```
+
+```{r}
+choices_list_logical <- mph %>% 
+  select_if(is.logical) %>% 
+  names 
+choices_list_logical
+```
+
+
+```{r,eval=FALSE}
+test <- mph %>%  filter(measure %in% list('median_postbirth_cost','total_prescriptions')) %>% 
+  filter(tag %in% c('Prescription Related Claims','Count of Mothers')
+```
+
+```{r,eval=FALSE}
+test <- mph %>%  filter(measure %in% list('median_postbirth_cost','total_prescriptions','total_claims')) %>% 
+  filter(tag %in% c('Prescription Related Claims','Count of Mothers')
+```
+
+```{r,eval=FALSE}
+test <- mph %>%  
+  filter(tag %in% c('Prescription Related Claims','Count of Mothers')
+```
+
+
+```{r}
+filtered_data(mph, c('median_prebirth_cost'), c('All')) %>% 
+  select(measure,tag) %>% 
+  distinct
+```
+
+```{r}
+  mph %>% 
+    filter(measure %in% c('median_prebirth_cost')) %>% 
+    select(tag) %>% distinct %>% pull(tag) %>% prepend("All")
+```
+
+
+```{r}
+mph %>% head
+```
+```{r}
+d <- mph %>% 
+  mutate(key = str_c(measure,tag)) %>% 
+  select(COUNTY, key, value ) %>% 
+  spread(key = key, value = value)
+```
+
+```{r}
+library(Hmisc)
+library(GGally)
+dm <- as.matrix(d %>% select(-COUNTY), dimnames = NULL)
+dimnames(dm) <- NULL
+dm %>% ggcorr()
+```
+
+
+
+

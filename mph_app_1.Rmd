@@ -1,0 +1,270 @@
+---
+title: Maternity 
+output: 
+   flexdashboard::flex_dashboard:
+     orientation: columns
+     vertical_layout: fill
+runtime: shiny
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, include = FALSE)
+library(Hmisc)
+library(GGally)
+library(tidytext)
+library(SnowballC)
+library(tidyverse)
+library(rjson)
+```
+
+```{r,include=FALSE}
+############################################ Read Data #########################################
+```
+
+```{r global}
+# load the source data
+mph <- read_rds(file.path('data','mph.rds'))
+```
+
+
+```{r, include=FALSE}
+################################   Non reactive Functions ######################################
+```
+
+
+```{r}
+# filter data based on user selection
+filter_data <- function(d, measure_list, tag_list){
+  d  %>% 
+    filter(measure %in% measure_list | 'All' %in% measure_list) %>% 
+    filter(tag     %in% tag_list     | 'All' %in% tag_list)
+}
+```
+
+```{r}
+# Function to Update the list for the measures.
+choices_measure <- function(d, tag_list){ 
+  mph %>% 
+    filter(tag %in% tag_list | 'All' %in% tag_list) %>% 
+    select(measure) %>% 
+    distinct %>% 
+    pull(measure) %>% 
+    prepend('All') 
+}
+```
+
+```{r}
+#update the list for the tags.
+choices_tag <- function(d, measure_list) { 
+  mph %>% 
+    filter(measure %in% measure_list | 'All' %in% measure_list) %>% 
+    select(tag) %>% 
+    distinct %>% 
+    pull(tag) %>% 
+    prepend("All") 
+} 
+```
+
+```{r, include=FALSE}
+######################################   Reactive Functions  ##############################################
+```
+
+
+```{r}
+# Update the list for the measures.
+choices_measure_update <- eventReactive(input$tag,{
+  choices_measure(mph, input$tag)
+})
+```
+
+```{r}
+#update the list for the tags.
+choices_tag_update <- eventReactive(input$measure,{ 
+  choices_tag(mph,input$measure)
+})
+```
+
+```{r}
+# Filter data (call function to filter data) when user requests the filter action.
+filtered_data <- eventReactive(input$filter_data,{
+   mph %>% 
+    filter_data(input$measure, input$tag) 
+} )
+```
+
+```{r}
+# Spread data for correlation Plot
+spread_data <- eventReactive(input$filter_data,{ 
+  d <- filtered_data() %>%  
+    mutate(key = str_c(tag, " ", measure)) %>%  
+    #mutate(key = str_c(tag)) %>%  
+    select(COUNTY, key, value ) %>%  
+    spread(key = key, value = value)  
+} )
+```
+
+```{r, include=FALSE}
+###################################   Create extra set of reactiveValues  #############################
+```
+
+```{r}
+app_input <- reactiveValues()
+
+```
+
+```{r}
+app_input$measure <- eventReactive(input$measure,{
+  input$measure
+})
+```
+
+```{r}
+app_input$tag <- eventReactive(input$tag,{
+  input$tag
+})
+```
+
+```{r}
+app_input$topic <- eventReactive(input$topic,{
+  input$topic
+})
+```
+
+
+```{r, include=FALSE}
+##################################   Redraw User Interface ######################################
+```
+
+```{r}
+# Update the measure choices after selecting a measure
+observeEvent(input$measure, {  
+  choices_list_tag <- choices_tag(mph,input$measure)
+  updateCheckboxGroupInput(session,"tag", label = h3("Population"),
+                           choices = choices_list_tag,
+                           selected = input$tag)
+})
+```
+
+```{r}
+# Update the measure choices after selecting a tag
+observeEvent(input$tag, {  
+  choices_list_measure <- choices_measure(mph,input$tag)
+  updateCheckboxGroupInput(session,"measure", label = h3("Measurement Type"),
+                           choices = choices_list_measure,
+                           selected = input$measure)
+})
+```
+
+```{r, include=FALSE}
+##################################################Output ######################################################
+```
+
+```{r}
+# Create a density plot
+output$density_measure <-  renderPlot({
+ filtered_data() %>% 
+  ggplot(aes(x = value, group = measure, color = measure)) +
+  geom_density() +
+  ggplot2::scale_x_log10()  
+   }) 
+  
+```
+
+
+```{r}
+output$density_tag <-  renderPlot({
+ filtered_data() %>% 
+  ggplot(aes(x = value, group = tag, color = tag)) +
+  geom_density() +
+  ggplot2::scale_x_log10()  
+   }) 
+  
+```
+
+```{r}
+output$corr_plot <- renderPlot({ 
+  d <- spread_data() 
+  dm <- as.matrix(d %>% select(-COUNTY))
+  #dimnames(dm) <- NULL
+  dm %>% ggcorr() 
+})
+```
+
+```{r}
+###################################  UI ############################################
+```
+
+Column{.sidebar data-width=300}
+-----------------------------------------------------------------------
+
+```{r, include=TRUE}
+actionLink("filter_data", "Filter Data")
+```
+
+```{r, include=TRUE}
+actionLink("density", "Create density plot")
+```
+
+```{r, include=TRUE}
+choices_list_tag <- choices_tag(mhp,c('All'))
+checkboxGroupInput("tag", label = h3("Population"),  
+                   choices = choices_list_tag, 
+                   selected = choices_list_tag[[1]])
+```
+
+```{r, include=TRUE} 
+choices_list_measure <- choices_measure(mph,c('All'))
+checkboxGroupInput("measure", label = h3("Measurement Type"),  
+                   choices = choices_list_measure, 
+                   selected = choices_list_measure[[1]])
+```
+
+
+Output {.tabset}
+-----------------------------------------------------------------------
+### Data Filter
+
+```{r, include=TRUE}
+renderTable({
+    filtered_data() %>% 
+    arrange(COUNTY)
+})
+```
+
+
+### Density Plot by Tag
+
+```{r, include=TRUE}
+    plotOutput("density_tag")
+```
+
+### Density Plot by Measure
+
+```{r, include=TRUE}
+    plotOutput("density_measure")
+```
+
+
+### Plot Data
+
+```{r, include=TRUE}
+renderTable({
+  filtered_data() %>% 
+    select(COUNTY, measure ,tag, value)
+    
+})
+```
+
+### Corr Plot Data
+
+```{r, include=TRUE}
+renderTable({
+  spread_data()
+})
+```
+
+### Correlation Plot
+
+```{r, include=TRUE}
+plotOutput("corr_plot")
+```
+

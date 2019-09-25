@@ -1,0 +1,569 @@
+---
+title: "Create Dataset"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, include = FALSE)
+
+library(tidytext)
+library(SnowballC)
+library(tidyverse)
+library(rjson)
+```
+
+```{r, read_data}
+#' read a csv table from the data directory
+#'
+#' read a csv table from the data directory when given a text string in the file name
+#'
+#' @param path: A text string contained in the file name that uniquely identifies that desired file.
+read_data <- function(path) {  
+  dir_list <- list.dirs(file.path('data'))
+  index    <- dir_list %>% str_detect(path)  
+  data     <- dir_list[index]  
+  files    <- list.files(data)    
+  index    <- files %>% str_detect(regex(str_c(path,'.*','\\.csv'),ignore_case = TRUE)  ) 
+  d_pc     <- read_csv(file.path(data,files[index]))
+  d_pc
+}
+
+```
+
+```{r, augment_names}
+#' Add a tag to the end of a data table name
+#' 
+#' Add a tag to the end of a data table name to uniquely identify it.
+#'
+#' @param file_name: The file name to change 
+#' @param tag: A text string to add to the end of a file name.
+augment_names <- function(file_name,tag){ 
+  d <- read_rds(file.path('data',str_c(file_name,'.rds')))
+  d <- d %>% select(COUNTY, everything())   
+  names(d) <- c("COUNTY",str_c(names(d)[2:length(d)],tag))
+  d
+}
+
+```
+
+This data set contains information on cost and event counts.
+
+* Postbirthing
+* Prebirthing
+* Prescription Cost
+* Total Claims
+* Total Cost
+* Total Prescriptions
+
+Each item contains information on
+
+* Diabetes
+* Diagnosis of obesity
+* Diagnosis of stress
+* Diagnosis of substance abuse
+* Emergency Room
+* Maternal Health
+* 
+
+
+## Prescription Related Claims by Recipient County
+```{r}
+parse_names <-function(d) {
+  text_df <- tibble(text = stringr::str_split(names(d),pattern = '_')) %>% 
+    unnest %>% 
+    distinct  %>% 
+    unnest_tokens(word,text) %>% 
+    anti_join(stop_words, by = 'word') %>% 
+    mutate(word = wordStem(word)) %>% 
+    distinct
+    
+  #text_df %>%  unnest_tokens(word, text)
+}
+```
+
+
+```{r,create_indicators}
+
+create_indicators <- function(d) {
+ d %>% 
+  gather(value = "value", key = "type", -COUNTY)    %>% 
+  mutate(features = str_split(type, pattern = '_'))       %>% 
+  unnest(features)       %>% 
+  mutate(features = tolower(features)) %>% 
+  mutate(features = wordStem((features))) %>% 
+  mutate(i = 1) %>% 
+  spread(value = 'i', key = 'features') 
+}
+#d2 %>% create_indicators()
+```
+
+
+```{r}
+names(d2)
+```
+
+
+data set
+:  rx_claims
+```{r}
+h2 <- 'https://hub.mph.in.gov/dataset/b8192d38-cbbc-438e-a3c5-fe7be0b3e010/resource/0cf62b0a-4526-40a4-a632-08cdd9840ae9/download/03_prescription_related_claims_by_recipient_county.csv'
+h3 <- 'https://hub.mph.in.gov/dataset/b6c042b5-ff33-4b4f-a7b1-85cdbcdd0c64/resource/0f7cb803-0237-4191-bddc-259a5a51ff25/download/24_prescription_related_claims_of_mothers_with_an_er_visit_by_recipient_county.csv'
+h4 <- 'https://hub.mph.in.gov/dataset/beeb019d-9bfc-4e41-bc15-aa27165a51dc/resource/95f202d9-7abd-4691-8625-a1895e21f3b4/download/23_claims_of_mothers_with_an_er_visit_by_recipient_county.csv'
+h5 <- 'https://hub.mph.in.gov/dataset/c5e2b9d8-ab44-490e-9e37-eee3e9db3b62/resource/4ef71011-5784-4ab9-b2d0-63ba2a8b4f10/download/22_mothers_with_an_er_visit_by_recipient_county.csv'
+
+control <- tribble(
+  ~https, ~tag,
+  h2    , 'Prescription Related Claims',
+  h3    , 'Prescription Related Claims of Mothers with an ER Visit' ,
+  h4    , 'Claims of Mothers With and ER Visit',
+  h5    , 'Mothers With and ER Visit'
+)
+
+read_and_merge <- function(https, tag) {
+  d <- read_csv(https) %>%  
+    create_indicators %>% 
+    mutate(tag = tag) %>% 
+    select(-type)
+}
+
+control %>% pmap(read_and_merge) %>% 
+  bind_rows
+  
+```
+
+```{r, eval=FALSE}
+
+
+d2 <- read_csv('https://hub.mph.in.gov/dataset/b8192d38-cbbc-438e-a3c5-fe7be0b3e010/resource/0cf62b0a-4526-40a4-a632-08cdd9840ae9/download/03_prescription_related_claims_by_recipient_county.csv')
+
+write_rds(d2,file.path('data','d2.rds'))
+```
+
+```{r}
+d2
+```
+
+```{r}
+d2 %>% create_indicators
+```
+
+```{r}
+d2 <- read_rds(file.path('data','d2.rds'))
+d2 <- augment_names('d2',"_rx_claims")
+d2 %>% head
+```
+## Prescription Related Claims of Mothers with an ER Visit by Recipient County
+
+data set
+:  rx_claims_er
+
+```{r, eval=FALSE}
+d3 <- read_csv('https://hub.mph.in.gov/dataset/b6c042b5-ff33-4b4f-a7b1-85cdbcdd0c64/resource/0f7cb803-0237-4191-bddc-259a5a51ff25/download/24_prescription_related_claims_of_mothers_with_an_er_visit_by_recipient_county.csv')
+
+write_rds(d3,file.path('data','d3.rds'))
+```
+```{r}
+d3
+```
+
+```{r}
+d3 %>% create_indicators
+```
+
+```{r}
+d3 <- read_rds(file.path('data','d3.rds'))
+d3 <- augment_names('d3',"_rx_claims_er")
+glimpse(d3)
+```
+
+## Claims of Mothers with an ER Visit by Recipient County 
+
+data set
+:  er
+
+```{r, eval=FALSE}
+d4 <- read_csv('https://hub.mph.in.gov/dataset/beeb019d-9bfc-4e41-bc15-aa27165a51dc/resource/95f202d9-7abd-4691-8625-a1895e21f3b4/download/23_claims_of_mothers_with_an_er_visit_by_recipient_county.csv')
+
+write_rds(d4,file.path('data','d4.rds'))
+d4
+```
+
+```{r}
+d4 <- read_rds(file.path('data','d4.rds'))
+d4 <- augment_names('d4','_er')
+d4 %>% head
+```
+
+## Mothers with an ER Visit by Recipient County 
+
+data set
+:  er
+
+```{r,eval=FALSE}
+d5 <- read_csv('https://hub.mph.in.gov/dataset/c5e2b9d8-ab44-490e-9e37-eee3e9db3b62/resource/4ef71011-5784-4ab9-b2d0-63ba2a8b4f10/download/22_mothers_with_an_er_visit_by_recipient_county.csv')
+write_rds(d5,file.path('data','d5.rds'))
+```
+
+```{r}
+d5 <- read_rds(file.path('data','d5.rds'))
+d5 <- augment_names('d5','_er' )
+head(d5)
+```
+
+
+## Prescription Related Claims of Mothers Diagnosed with stress by Recipient County 
+
+data set
+:  rx_stress
+
+```{r, eval=FALSE}
+d6 <- read_csv('https://hub.mph.in.gov/dataset/1a0db5ce-8736-4642-abcd-3a7b2c411dca/resource/89e3c9f4-115f-428f-9191-c8bd21ccd8b5/download/21_prescription_related_claims_of_mothers_diagnosed_with_stress_by_recipient_county.csv')
+
+write_rds(d6,file.path('data','d6.rds'))
+d6
+```
+
+```{r}
+d6 <- read_rds(file.path('data','d6.rds'))
+d6 <- augment_names('d6','_rx_stress' )
+head(d6)
+```
+## Claims of Mothers Diagnosed with Stress by Recipient County
+
+data set
+:  dx_stress
+
+```{r,eval=FALSE}
+d7<- read_csv('https://hub.mph.in.gov/dataset/9de3f203-8ea0-4b44-8909-0b911e8593b1/resource/6a4e21ee-6ebd-45de-bb82-45950983d3b7/download/20_claims_of_mothers_diagnosed_with_stress_by_recipient_county.csv')
+
+write_rds(d7,file.path('data','d7.rds'))
+```
+```{r}
+d7 <- read_rds(file.path('data','d7.rds'))
+d7 <- augment_names('d7','_dx_stress' )
+head(d7)
+```
+
+## Mothers with a Stress Related Claim by Recipient County 
+
+data set
+:  stress_claim
+
+```{r, eval=FALSE}
+d8 <- read_csv('https://hub.mph.in.gov/dataset/96a26efa-d9b9-4131-81e2-2f0804d069c3/resource/1a677106-5ef8-49c0-b918-b6905b8a4e0b/download/19_mothers_with_a_stress_related_claim_by_recipient_county.csv')
+
+write_rds(d8,file.path('data','d8.rds'))
+```
+`
+```{r}
+d8 <- read_rds(file.path('data','d8.rds'))
+d8 <- augment_names('d8','_stress' )
+head(d8)
+```
+
+## Prescription Related Claims of Mothers with Pre-Term Delivery by Recipient County
+
+data set
+:  rx_pre_term
+
+```{r, eval=FALSE}
+d9 <- read_csv('https://hub.mph.in.gov/dataset/07146ade-a340-47f3-9839-ef01c619dc62/resource/a6e70e65-e868-4023-a166-9dab80352d3c/download/18_prescription_related_claims_of_mothers_with_preterm_delivery_by_recipient_county.csv')
+
+write_rds(d9,file.path('data','d9.rds'))
+```
+
+
+```{r}
+d9 <- read_rds(file.path('data','d9.rds'))
+d9 <- augment_names('d9','_rx_pre_term' )
+head(d8)
+```
+
+
+## Claims of Mothers with Pre-Term Delivery by Recipient County 
+
+data
+:  claims_pre_term
+
+```{r, eval=FALSE}
+d13 <- read_csv('https://hub.mph.in.gov/dataset/d450e6c5-9877-4840-9e97-b2b96cb1c08e/resource/b8951968-b4ea-4559-a409-6380fdf8ff5d/download/17_claims_of_mothers_with_preterm_delivery_by_recipient_county.csv')
+write_rds(d13,file.path('data','d13.rds'))
+```
+
+```{r}
+d13 <- read_rds(file.path('data','d13.rds'))
+d13 <- augment_names('d13','_pre_term' )
+head(d13)
+```
+
+## Prescription Related Claims of Mothers with Substance Use by Recipient County 
+
+data
+:  rx_substance
+
+```{r, eval=FALSE}
+d14 <- read_csv('https://hub.mph.in.gov/dataset/b3ed9eaa-cb54-44ef-bf83-0fb272999e2b/resource/2f636563-172a-4efc-98c0-15bd45be3610/download/15_prescription_related_claims_of_mothers_with_substance_use_by_recipient_county.csv')
+
+write_rds(d14,file.path('data','d14.rds'))
+```
+
+
+```{r}
+d14 <- read_rds(file.path('data','d14.rds'))
+d14 <- augment_names('d14','_dx_substance' )
+head(d14)
+```
+
+## Claims of Mothers with Substance Use by Recipient County 
+
+data
+: substance
+```{r, eval=FALSE}
+d15 <- read_csv('https://hub.mph.in.gov/dataset/9d6ec92d-de6c-445d-ae9a-e242af1a9661/resource/84d1532c-ced4-4c1c-b892-ee6722c127b7/download/14_claims_of_mothers_with_substance_use_by_recipient_county.csv')
+
+write_rds(d15,file.path('data','d15.rds'))
+```
+
+```{r}
+d15 <- read_rds(file.path('data','d15.rds'))
+d15 <- augment_names('d15','_substance' )
+head(d15)
+```
+
+## Prescription Related Claims of Mothers Diagnosed with Obesity by Recipient County 
+
+data
+:  rx_obesity
+
+```{r, eval=FALSE}
+d16 <- read_csv('https://hub.mph.in.gov/dataset/b1906fbd-aafb-4a4f-9f35-fbeefc92a07b/resource/0f46cd23-530f-4358-ae39-b74603797926/download/09_prescription_related_claims_of_mothers_diagnosed_with_obesity_by_recipient_county.csv')
+
+write_rds(d16,file.path('data','d16.rds'))
+```
+
+```{r}
+d16 <- read_rds(file.path('data','d16.rds'))
+d16 <- augment_names('d16','_obesity' )
+head(d16)
+```
+
+## Birth Count by Recipient County
+
+data
+: birth_count
+```{r, eval=FALSE}
+d17 <- read_csv('https://hub.mph.in.gov/dataset/55e2cbf7-085d-4086-84dd-79613d06aa23/resource/59faf526-d40f-432f-83e9-fc4bfe3179fc/download/04_birth_count_by_recipient_county.csv')
+
+write_rds(d17,file.path('data','d17.rds'))
+```
+```{r}
+d17 <- read_rds(file.path('data','d17.rds'))
+d17 <- augment_names('d17','_birth_count' )
+head(d17)
+```
+
+## Maternal Health Claims by Recipient County
+
+data
+:  maternal_health
+
+```{r, eval=FALSE}
+d18 <- read_csv('https://hub.mph.in.gov/dataset/ae880b2f-e119-499a-8c82-5238d04c7001/resource/05f64b98-4451-490a-aa64-a4cd0638f59c/download/02_maternal_health_claims_by_recipient_county.csv')
+
+write_rds(d18,file.path('data','d18.rds'))
+```
+```{r}
+d18 <- read_rds(file.path('data','d18.rds'))
+d18 <- augment_names('d18','_maternal_health' )
+head(d18)
+```
+
+## Mothers with a Substance Use Related Claim by Recipient County 
+
+data
+: substance_use
+
+```{r, eval=FALSE}
+d19 <- read_csv('https://hub.mph.in.gov/dataset/e21c8eb9-23fa-43f7-8c32-fcb98ab2d39a/resource/c5ee0772-96f4-4e15-93f2-03bb79aa0bcd/download/13_mothers_with_a_substance_use_related_claim_by_recipient_county.csv')
+
+write_rds(d19,file.path('data','d19.rds'))
+```
+
+```{r}
+d19 <- read_rds(file.path('data','d19.rds'))
+d19 <- augment_names('d19','_substance_use' )
+head(d19)
+```
+
+## Prescription Related Claims of Mothers with Diabetes by Recipient County 
+
+data
+: rx diabetes
+
+```{r, eval=FALSE}
+d20 <- read_csv('https://hub.mph.in.gov/dataset/9ba31ad1-3876-4291-9260-a4aa670de16c/resource/ee28629b-afe0-4463-9513-712958474c07/download/12_prescription_related_claims_of_mothers_with_diabetes_by_recipient_county.csv')
+
+write_rds(d20,file.path('data','d20.rds'))
+```
+
+```{r}
+d20 <- read_rds(file.path('data','d20.rds'))
+d20 <- augment_names('d20','_rx_diabetes' )
+head(d20)
+```
+
+## Claims of Mothers with Diabetes by Recipient County
+
+data
+: diabetes
+
+```{r, eval=FALSE}
+d21 <- read_csv('https://hub.mph.in.gov/dataset/a5acf50e-7bfb-4a26-b3cc-e55213075eb8/resource/0b9de5bf-258a-4942-ae95-30fe333d7582/download/11_claims_of_mothers_with_diabetes_by_recipient_county.csv')
+
+write_rds(d21,file.path('data','d21.rds'))
+```
+
+```{r}
+d21 <- read_rds(file.path('data','d21.rds'))
+d21 <- augment_names('d21','_diabetes' )
+head(d21)
+```
+
+## Mothers with a Diabetes Related Claim by Recipient County
+
+data
+: count diabetes 
+```{r, eval=FALSE}
+d22 <- read_csv('https://hub.mph.in.gov/dataset/6d202617-09b4-4303-b110-5a7ee18bdc45/resource/1817e997-badb-4d9a-b457-a2c067798744/download/10_mothers_with_a_diabetes_related_claim_by_recipient_county.csv')
+
+write_rds(d22,file.path('data','d22.rds'))
+```
+
+```{r}
+d22 <- read_rds(file.path('data','d22.rds'))
+d22 <- augment_names('d22','_diabetes' )
+head(d22)
+```
+
+## Claims of Mothers Diagnosed with Obesity by Recipient County 
+
+data 
+:  dx obesity
+```{r, eval=FALSE}
+d23 <- read_csv('https://hub.mph.in.gov/dataset/1850d68e-a8ce-4408-9f3e-0ee4f0acde04/resource/2299013f-dd4c-47a3-b9ec-ebf0c05e1d3e/download/08_claims_of_mothers_diagnosed_with_obesity_by_recipient_county.csv')
+
+write_rds(d23,file.path('data','d23.rds'))
+```
+
+```{r}
+d23 <- read_rds(file.path('data','d23.rds'))
+d23 <- augment_names('d23','_dx_obesity' )
+head(d23)
+```
+
+## Count of Mothers Diagnosed with Obesity by Recipient County 
+
+data
+:  count obesity
+
+```{r, eval=FALSE}
+d24 <- read_csv('https://hub.mph.in.gov/dataset/baa800c2-c6ba-45f5-a1bf-11e9326c28e5/resource/867296c1-54cf-41cc-824b-31524ec1e7ab/download/07_count_of_mothers_diagnosed_with_obesity_by_recipient_county.csv')
+
+write_rds(d24,file.path('data','d24.rds'))
+```
+```{r}
+d24 <- read_rds(file.path('data','d24.rds'))
+d24 <- augment_names('d24','_obesity' )
+head(d24)
+```
+
+## Infant Prescription Related Claims by Recipient County 
+
+data
+:  rx_infant
+
+```{r, eval=FALSE}
+d25 <- read_csv('https://hub.mph.in.gov/dataset/490755a6-4755-4060-ab26-646c544636ed/resource/c0994219-e833-4337-95e3-8edab622ca95/download/06_infant_prescription_related_claims_by_recipient_county.csv')
+
+write_rds(d25,file.path('data','d25.rds'))
+```
+
+```{r}
+d25 <- read_rds(file.path('data','d25.rds'))
+d25 <- augment_names('d25','_rx_infant' )
+head(d25)
+```
+
+## Infant Claims by Recipient County
+
+data
+:  infant
+```{r, eval=FALSE}
+d26 <- read_csv('https://hub.mph.in.gov/dataset/d72a6291-8b56-4a5b-bc1c-bfdfd71b6dd1/resource/209bf480-bae2-4518-ba0d-244f21c825eb/download/05_infant_claims_by_recipient_county.csv')
+
+write_rds(d26,file.path('data','d26.rds'))
+```
+
+```{r}
+d26 <- read_rds(file.path('data','d26.rds'))
+d26 <- augment_names('d26','_infant' )
+head(d26)
+```
+
+## Count of Mothers by Recipient County 
+
+data
+:  Mothers count
+```{r, eval=FALSE}
+d27 <- read_csv('https://hub.mph.in.gov/dataset/74881778-735c-4260-9a62-f8afe4cd46a0/resource/9b18a616-681c-4844-ab80-1ab46dd3dff0/download/01_count_of_mothers_by_recipient_county.csv')
+
+write_rds(d27,file.path('data','d27.rds'))
+d27
+```
+
+```{r}
+d27 <- read_rds(file.path('data','d27.rds'))
+d27 <- augment_names('d27','_mothers' )
+head(d27)
+```
+
+
+```{r,include=TRUE}
+n <- c(2:9,13:27)
+n
+d <- str_c('d',n)  %>% map(get) %>% purrr::reduce(function(x,y){x %>% left_join(y, by = 'COUNTY')})
+d <- d %>% select(sort(names(d)))
+glimpse(d)
+```
+```{r}
+
+write_csv(d,file.path('data','d.csv'))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

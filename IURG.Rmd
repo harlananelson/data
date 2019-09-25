@@ -1,0 +1,107 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+## Mothers Diagnosed with Intrauterine Growth Restriction (IURG), or Pre-Eclampsia by ZipCode 
+
+data set
+:  1
+
+```{r,eval=FALSE}
+d1 <- read_csv('https://hub.mph.in.gov/dataset/dcdcee0c-ca93-4586-af9c-c843046ffc92/resource/6776c647-2d76-44e1-93fe-02b4ee739dde/download/regenstrief_dataset_momandbaby_datapalooza.csv', col_types = 'iiddddd')
+write_rds(d1,file.path('data','d1.rds'))
+```
+
+```{r, include=TRUE}
+d1 <- read_rds(file.path('data','d1.rds'))
+d1
+```
+This data gives the zip code.
+
+Map the zip to fips, then fips to county.
+
+
+First get and fips to city
+
+A data set with fips and county
+```{r}
+fips_zip <- read_csv('https://query.data.world/s/uwauhovv3qj4wv22csxxrdblltbcsj')  
+```
+The `fips_zip` data.
+```{r, include=TRUE}
+fips_zip %>% head
+```
+
+
+```{r}
+fips_county <- read_csv('https://query.data.world/s/x6dprlo6izfwfty7qaagn6phhdgsu3') %>% 
+  mutate(STATEFP = as.integer(STATEFP)) %>% 
+  mutate(COUNTYFP =  as.integer(COUNTYFP))
+```
+The `fips_country` data.
+
+```{r, include=TRUE}
+fips_county %>% head
+```
+
+
+```{r}
+city <- maps::county.fips %>% filter(str_detect(polyname,'indiana'))   %>% 
+  mutate(city = str_match(polyname,'^(.*),(.*)')[,3]) %>% 
+  select(-polyname) %>% 
+  mutate(STATEFP = floor(fips/1000)) %>% 
+  mutate(COUNTYFP = fips %% 1000)
+```
+
+The `city` data.
+```{r, include=TRUE}
+city %>% head
+```
+Combine the `fips_zip` data, the `fips_country` data, and the `city` data.
+```{r, include=TRUE}
+zip_level <-fips_zip  %>% 
+  mutate(STATEFP = as.integer(STATE)) %>% 
+  mutate(COUNTYFP = as.integer(COUNTY)) %>% 
+  select(-STATE,-COUNTY) %>% 
+  mutate(zip_code = str_sub(as.character(ZCTA5),1,4)) %>% 
+  mutate(zip_code = as.integer(zip_code)) %>% 
+  inner_join(fips_county, by = c('STATEFP','COUNTYFP')) %>% 
+  filter(STATE == 'IN') %>% 
+  inner_join(city, by = c('STATEFP','COUNTYFP')) %>% 
+  select(STATEFP, COUNTYFP, STATE,city,zip_code, COUNTYNAME, everything())   
+zip_level
+
+```
+The resulting edited version.
+```{r, include=TRUE}
+zip_3_county <- zip_level %>% 
+  mutate(zip_code = floor(zip_code/10))  %>% 
+  select(zip_code, everything()) %>% 
+  distinct(STATEFP, COUNTYFP, STATE, zip_code, COUNTYNAME)  %>% 
+  arrange(COUNTYNAME)
+zip_3_county
+```
+
+Add the county to the d1 dataset.
+```{r}
+d1_county <- d1 %>% 
+  inner_join(zip_3_county, by = 'zip_code') %>% 
+  filter(COUNTYNAME == 'Marion County') %>% 
+  arrange(year, zip_code)
+```
+
+```{r, include=TRUE}
+d1_county %>% head
+```
+
+
+Write the d1_country to the data set d1_country.csv.
+```{r, echo=TRUE, include=TRUE}
+write_csv(d1_county, file.path('data','d1_county.csv'))
+```
+
+```{r}
+data("stop_words")
+library(SnowballC)
+```

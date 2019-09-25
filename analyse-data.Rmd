@@ -1,0 +1,94 @@
+---
+title: "Analyze the Data"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, include = FALSE)
+library(tidytext)
+library(SnowballC)
+library(tidyverse)
+library(rjson)
+```
+
+```{r}
+mph <- read_rds(file.path('data','mph.rds'))
+```
+
+
+See all the possibilities other than the levels of tag.
+
+```{r}
+mph   %>% 
+  select(cost,event,median,postbirth,prebirth, prescript, total, claim, recipi ) %>% 
+  distinct %>% 
+  arrange(cost,event,median,postbirth,prebirth, prescript, total, claim, recipi )
+```
+Compare Prescription Related Claims median cost
+```{r}
+d <- mph %>% 
+  filter(cost, median)   %>% 
+  filter(tag == "Prescription Related Claims") %>% 
+  arrange(COUNTY)
+d
+```
+
+```{r}
+d %>% 
+  ggplot(aes(x = value, group = postbirth, color = postbirth)) +
+  geom_density() +
+  ggplot2::scale_x_log10()
+```
+```{r}
+mph %>% 
+  filter(cost, median)   %>% 
+  filter(tag == "Prescription Related Claims") %>% 
+  select(COUNTY, tag,  postbirth, value)  
+```
+```{r}
+select_measure <- function(filter_list){
+  mph  %>% 
+    filter(!!! rlang::syms(filter_list))
+}
+
+select_measure(c('cost','event'))
+
+```
+
+
+```{r}
+mph %>% select(tag) %>% distinct
+d1 <- mph %>% 
+  filter(cost, median)   %>% 
+  filter(tag == "Prescription Related Claims") %>% 
+  select(COUNTY, tag,  postbirth, value) %>% 
+  spread(value = 'value', key = "postbirth") %>% 
+  rename(postbirth = `TRUE`, prebirth = `FALSE`)
+d1
+```
+```{r}
+
+```
+
+```{r}
+d1[c('prebirth','postbirth')]
+Hmisc::rcorr(as.matrix(d1[c('prebirth','postbirth')]))
+```
+```{r}
+d1 %>% 
+  ggplot(aes(x = prebirth, y = postbirth)) + 
+  geom_point()
+```
+
+
+
+```{r}
+d %>% 
+  ggplot(aes(x = value, group = postbirth, color = postbirth)) +
+  geom_density() +
+  ggplot2::scale_x_log10()
+```
+
+
+

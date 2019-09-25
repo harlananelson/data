@@ -1,0 +1,190 @@
+---
+title: "create-merged-table"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, include = FALSE)
+library(tidytext)
+library(SnowballC)
+library(tidyverse)
+library(rjson)
+```
+
+```{r, read_data}
+#' read a csv table from the data directory
+#'
+#' read a csv table from the data directory when given a text string in the file name
+#'
+#' @param path: A text string contained in the file name that uniquely identifies that desired file.
+read_data <- function(path) {  
+  dir_list <- list.dirs(file.path('data'))
+  index    <- dir_list %>% str_detect(path)  
+  data     <- dir_list[index]  
+  files    <- list.files(data)    
+  index    <- files %>% str_detect(regex(str_c(path,'.*','\\.csv'),ignore_case = TRUE)  ) 
+  d_pc     <- read_csv(file.path(data,files[index]))
+  d_pc
+}
+
+```
+```{r}
+parse_names <-function(d) {
+  text_df <- tibble(text = stringr::str_split(names(d),pattern = '_')) %>% 
+    unnest %>% 
+    distinct  %>% 
+    unnest_tokens(word,text) %>% 
+    anti_join(stop_words, by = 'word') %>% 
+    mutate(word = wordStem(word)) %>% 
+    distinct
+    
+  #text_df %>%  unnest_tokens(word, text)
+}
+```
+
+
+```{r,create_indicators}
+
+create_indicators <- function(d) {
+ d %>% 
+  gather(value = "value", key = "type", -COUNTY)    %>% 
+  mutate(features = str_split(type, pattern = '_'))       %>% 
+  unnest(features)       %>% 
+  mutate(features = tolower(features)) %>% 
+  mutate(features = wordStem((features))) %>% 
+  mutate(i = 1) %>% 
+  spread(value = 'i', key = 'features') 
+}
+#d2 %>% create_indicators()
+```
+
+```{r}
+read_and_merge <- function(https, tag) {
+  d <- read_csv(https) %>%  
+    create_indicators %>% 
+    mutate(tag = tag) %>% 
+    select(-type)
+}
+
+```
+
+This data set contains information on cost and event counts.
+
+* Postbirthing
+* Prebirthing
+* Prescription Cost
+* Total Claims
+* Total Cost
+* Total Prescriptions
+
+Each item contains information on
+
+* Diabetes
+* Diagnosis of obesity
+* Diagnosis of stress
+* Diagnosis of substance abuse
+* Emergency Room
+* Maternal Health
+* 
+
+
+## Data Source
+
+```{r}
+h2 <- 'https://hub.mph.in.gov/dataset/b8192d38-cbbc-438e-a3c5-fe7be0b3e010/resource/0cf62b0a-4526-40a4-a632-08cdd9840ae9/download/03_prescription_related_claims_by_recipient_county.csv'
+h3 <- 'https://hub.mph.in.gov/dataset/b6c042b5-ff33-4b4f-a7b1-85cdbcdd0c64/resource/0f7cb803-0237-4191-bddc-259a5a51ff25/download/24_prescription_related_claims_of_mothers_with_an_er_visit_by_recipient_county.csv'
+h4 <- 'https://hub.mph.in.gov/dataset/beeb019d-9bfc-4e41-bc15-aa27165a51dc/resource/95f202d9-7abd-4691-8625-a1895e21f3b4/download/23_claims_of_mothers_with_an_er_visit_by_recipient_county.csv'
+h5 <- 'https://hub.mph.in.gov/dataset/c5e2b9d8-ab44-490e-9e37-eee3e9db3b62/resource/4ef71011-5784-4ab9-b2d0-63ba2a8b4f10/download/22_mothers_with_an_er_visit_by_recipient_county.csv'
+h6 <- 'https://hub.mph.in.gov/dataset/1a0db5ce-8736-4642-abcd-3a7b2c411dca/resource/89e3c9f4-115f-428f-9191-c8bd21ccd8b5/download/21_prescription_related_claims_of_mothers_diagnosed_with_stress_by_recipient_county.csv'
+h7 <- 'https://hub.mph.in.gov/dataset/9de3f203-8ea0-4b44-8909-0b911e8593b1/resource/6a4e21ee-6ebd-45de-bb82-45950983d3b7/download/20_claims_of_mothers_diagnosed_with_stress_by_recipient_county.csv'
+h8 <- 'https://hub.mph.in.gov/dataset/96a26efa-d9b9-4131-81e2-2f0804d069c3/resource/1a677106-5ef8-49c0-b918-b6905b8a4e0b/download/19_mothers_with_a_stress_related_claim_by_recipient_county.csv'
+h9 <- 'https://hub.mph.in.gov/dataset/07146ade-a340-47f3-9839-ef01c619dc62/resource/a6e70e65-e868-4023-a166-9dab80352d3c/download/18_prescription_related_claims_of_mothers_with_preterm_delivery_by_recipient_county.csv'
+h13 <- 'https://hub.mph.in.gov/dataset/d450e6c5-9877-4840-9e97-b2b96cb1c08e/resource/b8951968-b4ea-4559-a409-6380fdf8ff5d/download/17_claims_of_mothers_with_preterm_delivery_by_recipient_county.csv'
+h14 <- 'https://hub.mph.in.gov/dataset/b3ed9eaa-cb54-44ef-bf83-0fb272999e2b/resource/2f636563-172a-4efc-98c0-15bd45be3610/download/15_prescription_related_claims_of_mothers_with_substance_use_by_recipient_county.csv'
+h15 <- 'https://hub.mph.in.gov/dataset/9d6ec92d-de6c-445d-ae9a-e242af1a9661/resource/84d1532c-ced4-4c1c-b892-ee6722c127b7/download/14_claims_of_mothers_with_substance_use_by_recipient_county.csv'
+h16 <- 'https://hub.mph.in.gov/dataset/b1906fbd-aafb-4a4f-9f35-fbeefc92a07b/resource/0f46cd23-530f-4358-ae39-b74603797926/download/09_prescription_related_claims_of_mothers_diagnosed_with_obesity_by_recipient_county.csv'
+h17 <- 'https://hub.mph.in.gov/dataset/55e2cbf7-085d-4086-84dd-79613d06aa23/resource/59faf526-d40f-432f-83e9-fc4bfe3179fc/download/04_birth_count_by_recipient_county.csv'
+h18 <- 'https://hub.mph.in.gov/dataset/ae880b2f-e119-499a-8c82-5238d04c7001/resource/05f64b98-4451-490a-aa64-a4cd0638f59c/download/02_maternal_health_claims_by_recipient_county.csv'
+h19 <- 'https://hub.mph.in.gov/dataset/e21c8eb9-23fa-43f7-8c32-fcb98ab2d39a/resource/c5ee0772-96f4-4e15-93f2-03bb79aa0bcd/download/13_mothers_with_a_substance_use_related_claim_by_recipient_county.csv'
+h20 <- 'https://hub.mph.in.gov/dataset/9ba31ad1-3876-4291-9260-a4aa670de16c/resource/ee28629b-afe0-4463-9513-712958474c07/download/12_prescription_related_claims_of_mothers_with_diabetes_by_recipient_county.csv'
+h21 <- 'https://hub.mph.in.gov/dataset/a5acf50e-7bfb-4a26-b3cc-e55213075eb8/resource/0b9de5bf-258a-4942-ae95-30fe333d7582/download/11_claims_of_mothers_with_diabetes_by_recipient_county.csv'
+h22 <- 'https://hub.mph.in.gov/dataset/6d202617-09b4-4303-b110-5a7ee18bdc45/resource/1817e997-badb-4d9a-b457-a2c067798744/download/10_mothers_with_a_diabetes_related_claim_by_recipient_county.csv'
+h23 <- 'https://hub.mph.in.gov/dataset/1850d68e-a8ce-4408-9f3e-0ee4f0acde04/resource/2299013f-dd4c-47a3-b9ec-ebf0c05e1d3e/download/08_claims_of_mothers_diagnosed_with_obesity_by_recipient_county.csv'
+h24 <- 'https://hub.mph.in.gov/dataset/baa800c2-c6ba-45f5-a1bf-11e9326c28e5/resource/867296c1-54cf-41cc-824b-31524ec1e7ab/download/07_count_of_mothers_diagnosed_with_obesity_by_recipient_county.csv'
+h25 <- 'https://hub.mph.in.gov/dataset/490755a6-4755-4060-ab26-646c544636ed/resource/c0994219-e833-4337-95e3-8edab622ca95/download/06_infant_prescription_related_claims_by_recipient_county.csv'
+h26 <- 'https://hub.mph.in.gov/dataset/d72a6291-8b56-4a5b-bc1c-bfdfd71b6dd1/resource/209bf480-bae2-4518-ba0d-244f21c825eb/download/05_infant_claims_by_recipient_county.csv'
+h27 <- 'https://hub.mph.in.gov/dataset/74881778-735c-4260-9a62-f8afe4cd46a0/resource/9b18a616-681c-4844-ab80-1ab46dd3dff0/download/01_count_of_mothers_by_recipient_county.csv'
+
+control <- tribble(
+  ~https, ~tag,
+  h2    , 'Prescription Related Claims',
+  h3    , 'Prescription Related Claims of Mothers with an ER Visit' ,
+  h4    , 'Claims of Mothers With and ER Visit',
+  h5    , 'Mothers With and ER Visit',
+  h6    , 'Prescription Related Claims Of Mothers Diagnosed with Stress',
+  h7    , 'Claims of Mothers Diagnosed With Stress',
+  h8    , 'Mothers with a Stress Related Claim',
+  h9    , 'Prescription Related Claims of Mothers With Preterm Delivery',
+  h13   , 'Claims of Mothers with Preterm Delivery',
+  h14   , 'Prescription Related Claims of Mothers with Substance Use',
+  h15   , 'Claims of Mothers With Substance Use',
+  h16   , 'Prescription Related Claims of Mothers Diagnosed With Obesity',
+  h17   , 'Birth Count',
+  h18   , 'Maternal Health Claims',
+  h19   , 'Mothers with a Substance Use Related Claim',
+  h20   , 'Prescription Related Claims of Mothers With Diabetes',
+  h21   , 'Claims of Mothers With Diabetes',
+  h22   , 'Mothers With A Diabetes Related Claim',
+  h23   , 'Claims of Mothers Diagnosed with Obesity',
+  h24   , 'Count of Mothers Diagnosed with Obesity',
+  h25   , 'Infant Prescription Related Claims',
+  h26   , 'Infant Claims',
+  h27   , 'Count of Mothers'
+)
+
+mph_from_web <- control %>% pmap(read_and_merge) %>% 
+  bind_rows() %>% 
+  mutate_at(vars(cost,event,median,postbirth,prebirth, prescript, total, claim, recipi), ~if_else(is.na(.x),FALSE,TRUE)) %>% 
+  select(COUNTY, tag, value, cost,event,median,postbirth,prebirth, prescript, total, claim, recipi )
+mph_from_web %>% head(10)
+write_rds(mph_from_web,file.path('data','mph_from_web.rds'))
+```
+```{r}
+mph_from_web <- read_rds(file.path('data','mph_from_web.rds'))
+```
+
+Create a list of the field possibilities
+```{r, eval=TRUE}
+# Create a list of the field possibilities.
+mph_from_web %>% 
+  select(cost,	event,	median,	postbirth,	prebirth,	prescript,	total,	claim,	recipi ) %>% 
+  distinct %>% 
+  write_csv(file.path('data','fields.csv'))
+```
+
+
+
+
+Read in the hand created variable names, which are names `measure_names.csv`
+
+```{r, eval=TRUE}
+# Read in the codes fields
+measure_names <- read_csv(file.path('data','measure_names.csv'))
+```
+
+Merge the measure names with the current data set.
+```{r, eval=FALSE}
+# Join the coded fields with the long data set.
+mph <- mph_from_web %>% 
+  inner_join(measure_names)
+```
+
+Look at the structure of the data table
+
+```{r}
+str(mph)
+```
+```{r}
+write_rds(mph, file.path('data','mph.rds'))
+write_csv(mph, file.path('data','mph.csv'))
+```
